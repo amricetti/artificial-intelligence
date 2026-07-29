@@ -2,6 +2,7 @@ const weatherAgent = require('./weatherAgent');
 const goalkeeperAgent = require('./goalkeeperAgent');
 const financeAgent = require('./financeAgent');
 const newsAgent = require('./newsAgent');
+const guardrailAgent = require('./guardrailAgent');
 const conciergeAgent = require('../agent');
 const db = require('../database');
 
@@ -11,6 +12,18 @@ const db = require('../database');
  */
 async function orquestrarMensagem(textoMensagem, nomeRemetente) {
   const textoClean = textoMensagem.trim().toLowerCase();
+
+  // 0. Interceptação do Guardrail: Detecta tentativa de 'Copiar e Colar' manual e reconcilia com o SQLite
+  if (guardrailAgent.ehListaCopiadaEColada(textoMensagem)) {
+    const resGuardrail = await guardrailAgent.processarListaCopiadaGuardrail(textoMensagem, nomeRemetente);
+    if (resGuardrail.interceptado) {
+      return {
+        agente: 'Guardrail & Reconciliação Agent',
+        respostaDireta: resGuardrail.respostaDireta,
+        houveAlteracao: true
+      };
+    }
+  }
 
   // 1. Tenta rotear para o Agente Financeiro & PIX
   const resFinanceiro = financeAgent.processarFinanceiro(textoMensagem, nomeRemetente);
