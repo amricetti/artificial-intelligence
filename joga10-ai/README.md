@@ -4,16 +4,17 @@
 [![LangChain Core](https://img.shields.io/badge/LangChain-Core%20%26%20Generative%20AI-blue.svg?style=for-the-badge&logo=langchain)](https://js.langchain.com/)
 [![SQLite WAL](https://img.shields.io/badge/Database-SQLite3%20WAL-003B57.svg?style=for-the-badge&logo=sqlite)](https://www.sqlite.org/)
 [![SRE SLA Target](https://img.shields.io/badge/SLO-99.0%25%20Availability-success.svg?style=for-the-badge&logo=prometheus)](https://sre.google/)
+[![Guardrails](https://img.shields.io/badge/Security-Pre--Response%20Guardrails-red.svg?style=for-the-badge&logo=shield)](https://github.com/amricetti/artificial-intelligence)
 [![License MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
 > **Production-Grade Multi-Agent Architecture**  
-> Ecossistema agêntico autônomo desenvolvido em Node.js com **LangChain**, arquitetura **Provider-Agnostic** (Google Gemini, OpenAI GPT-4o, Anthropic Claude), **Ingestão Multimodal de Voz & Visão Computacional**, **RAG em Tempo Real** e **Motor de Telemetria SRE em Tempo Real** (SLI, SLO, TTFT, Tokens & Custos em USD/BRL).
+> Ecossistema agêntico autônomo desenvolvido em Node.js com **LangChain**, arquitetura **Provider-Agnostic** (Google Gemini, OpenAI GPT-4o, Anthropic Claude), **Ingestão Multimodal de Voz & Visão Computacional**, **RAG em Tempo Real**, **Prompts em 7 Seções Industriais**, **Pipeline de Guardrails Pré-Resposta** e **Motor de Telemetria SRE em Tempo Real** (SLI, SLO, TTFT, Tokens & Custos em USD/BRL).
 
 ---
 
 ## 🌟 Visão Geral da Arquitetura
 
-O **Joga10-AI** utiliza o padrão **Supervisor / Multi-Sub-Agentes Especialistas**, onde um orquestrador central recebe e analisa eventos em tempo real do WhatsApp e despacha para agentes autônomos especializados baseando-se na intenção, tipo de mídia (Texto, Áudio de Voz, Imagem de Comprovante PIX) e políticas de segurança.
+O **Joga10-AI** utiliza o padrão **Supervisor / Multi-Sub-Agentes Especialistas com Guardrails Pré-Resposta**, onde nenhum sub-agente responde diretamente ao usuário final. O supervisor central roteia eventos para os agentes especialistas, cujas respostas são auditadas pela **Camada de Guardrail (`guardrailAgent.js`)** antes de serem emitidas no WhatsApp.
 
 ```mermaid
 flowchart TD
@@ -28,15 +29,20 @@ flowchart TD
     Router -->|Contratação Goleiro| GoalkeeperAgent[🧤 Agente de Goleiros Externos]
     Router -->|PIX & Cobrança| FinanceAgent[💰 Agente Financeiro & Mensalidades]
     Router -->|Súmula & Presença| PresenceAgent[⚽ Concierge Principal - LangChain]
-    Router -->|Comando !sre| SREGuard[⛔ SRE Security Guard - Restrito ao Alan]
 
     AudioAgent --> LLMFactory[🤖 LangChain LLM Factory Multi-Provider]
     VisionAgent --> LLMFactory
     NewsRAG --> LLMFactory
     PresenceAgent --> LLMFactory
 
-    LLMFactory --> SRETelemetry[(📊 SRE Telemetry & Metrics DB - SQLite)]
-    SRETelemetry --> Dashboard[📈 SRE Executive Dashboard !sre]
+    LLMFactory --> CandidateResponse[📝 Candidate Response Payload]
+    CandidateResponse --> GuardrailAgent[🛡️ Guardrail & Anti-Tampering Agent]
+    
+    GuardrailAgent -->|1. Copiar/Colar Check| DBReconciler[(💾 Reconciliação SQLite Oficial)]
+    GuardrailAgent -->|2. Anti-Prompt Injection| SecurityAudit[🔒 Auditoria de Segurança]
+    
+    SecurityAudit --> SRETelemetry[(📊 SRE Telemetry & Metrics DB - SQLite)]
+    SRETelemetry --> FinalOutput([💬 Resposta Auditada no WhatsApp])
 ```
 
 ---
@@ -45,7 +51,8 @@ flowchart TD
 
 | Agente | Tipo / Tecnologia | Responsabilidade Principal |
 | :--- | :--- | :--- |
-| 🔀 **Orquestrador Supervisor** | `orchestrator.js` | Roteamento dinâmico de intenções, comandos e sanitização de segurança. |
+| 🛡️ **Guardrail & Reconciliação** | `guardrailAgent.js` | Interceptação pré-resposta, reconciliação de listas copiadas e auditoria anti-prompt injection. |
+| 🔀 **Orquestrador Supervisor** | `orchestrator.js` | Roteamento dinâmico de intenções, chamadas de sub-agentes e controle da pipeline. |
 | ⚽ **Concierge de Presença** | `agent.js` + LangChain | Gestão de escalação, confirmações (*vou*, *tô dentro*), desistências e limitação de 12 por time. |
 | 🌐 **Agente Notícias RAG** | `newsAgent.js` + Web RSS | Coleta ao vivo na internet (*ge*, *ESPN*, *Banda B*) e síntese RAG de notícias de futebol. |
 | 🎙️ **Concierge de Áudio** | Gemini Multimodal Audio | Transcrição fiel de voz e extração de intenções em uma única chamada. |
@@ -59,27 +66,35 @@ flowchart TD
 
 ## 💎 Destaques Arquiteturais & Engenharia
 
-### 1. 🤖 Arquitetura Provider-Agnostic com LangChain (`llmFactory.js`)
-- **Totalmente desacoplado:** Alterne facilmente o LLM via `.env`:
-  - `LLM_PROVIDER="gemini"` → Google Gemini 3.5 / 2.0 Flash
-  - `LLM_PROVIDER="openai"` → OpenAI GPT-4o / GPT-4o-mini
-  - `LLM_PROVIDER="anthropic"` → Anthropic Claude 3.5 Haiku / Sonnet
-- **Fallback Híbrido por Regras:** Caso as APIs externas atinjam cota ou fiquem offline, o motor cai automaticamente para parsing heurístico por regex local sem derrubar a aplicação.
+### 1. 🛡️ Pipeline de Guardrails Pré-Resposta & Reconciliação (`guardrailAgent.js`)
+- **Anti Copiar-e-Colar Tampering:** Se alguém copiar a lista do WhatsApp, alterar nomes manualmente no texto e colar no grupo, o **Guardrail Agent** detecta a tentativa, extrai os nomes citados, sincroniza com o banco de dados SQLite oficial e substitui a mensagem adulterada pela **Lista Oficial do Banco de Dados**.
+- **Anti-Prompt Injection Audit:** Audita o payload final para evitar injeções de código malicioso (`DELETE FROM`, `ignore previous instructions`, etc.).
+- **Sub-Agentes Protegidos:** Nenhum sub-agente fala diretamente com o usuário final; todas as respostas passam primeiro pela validação do Guardrail.
 
-### 2. 📊 Observabilidade & Engenharia SRE (`sreTelemetry.js`)
-- Rastreamento em tempo real de cada interação gravado na tabela `sre_metrics`:
-  - **Métricas:** Prompt Tokens, Completion Tokens, Latência total (ms), TTFT (Time to First Token) e Custo estimado USD/BRL.
-  - **SLI / SLO:** Monitoramento continuo da taxa de sucesso de disponibilidade (SLO Target: 99.0%).
-  - **Painel Restrito (`!sre` / `!metrics`):** Acesso exclusivo para o Dono / Engenheiro SRE com validação RBAC.
+### 2. 📝 Prompts Padronizados em 7 Seções Industriais
+Todos os System Prompts dos sub-agentes foram construídos segundo o padrão enterprise:
+1. `=== 1. OVERVIEW ===` (Identidade e papel do agente)
+2. `=== 2. CONTEXT ===` (Ambiente de execução e canal)
+3. `=== 3. INSTRUCTIONS & SCOPE BOUNDARIES ===` (Foco 100% em futebol e regras de recusa)
+4. `=== 4. TOOLS & ACTIONS SCHEMA ===` (Schemas JSON de saída e ferramentas)
+5. `=== 5. EXAMPLES ===` (Few-Shot prompting com exemplos práticos)
+6. `=== 6. STANDARD OPERATING PROCEDURE (SOP) ===` (Algoritmo sequencial de execução)
+7. `=== 7. FINAL NOTES & FALLBACK GUARDRAILS ===` (Mecanismos de resiliência e persona boleira)
 
-### 3. 🌐 RAG em Tempo Real de Futebol (`newsAgent.js`)
-- Não depende do conhecimento estático do modelo.
-- Faz buscas ao vivo via RSS de notícias de qualquer clube (*Paraná Clube*, *Flamengo*, *Coritiba*, *Palmeiras*, *Champions League*) e injeta as manchetes no contexto do LangChain.
+### 3. 👑 Controle Dedicado de Mensalistas
+- **Quadro Oficial Separado:** O comando `!mensalistas` exibe um relatório exclusivo com os mensalistas do mês vigente, sem misturar com a lista da partida do dia.
+- **Comandos de Gerenciamento:**
+  - `!mensalista [Nome]` → Adiciona um jogador como mensalista (R$ 81,00/mês).
+  - `!removermensalista [Nome]` / `!avulso [Nome]` → Altera o jogador para avulso.
+  - `!limparmensalistas` → Zera o quadro mensal para início de um novo ciclo.
 
-### 4. 🎭 Personalidade Boleiro & Nome Dinâmico (`!nome Zurg`)
-- Troca de nome do assistente persistida via SQLite.
-- Restrição estrita de escopo: Responde entusiasticamente sobre futebol e recusa assuntos fora do esporte (*receitas*, *política*, *matemática*) no melhor estilo boleiro.
-- Saudações reativas (*Bom dia*, *Boa tarde*, *Boa noite*).
+### 4. 🤖 Arquitetura Provider-Agnostic com LangChain (`llmFactory.js`)
+- Alternância dinâmica entre **Google Gemini**, **OpenAI GPT-4o**, **Anthropic Claude** ou **Ollama** via `.env`.
+- Fallback por regras locais caso a API fique indisponível.
+
+### 5. 📊 Observabilidade & Engenharia SRE (`sreTelemetry.js`)
+- Telemetria por requisição (Tokens, Latência P50/P95, TTFT, Custos USD/BRL).
+- SLO de 99.0% de disponibilidade com painel executivo `!sre` restrito por RBAC ao dono (**Alan**).
 
 ---
 
@@ -87,7 +102,10 @@ flowchart TD
 
 | Comando | Permissão | Descrição |
 | :--- | :--- | :--- |
-| `!lista` / `!presenca` | Todos | Exibe a lista formatada atualizada da partida com clima. |
+| `!lista` / `!presenca` | Todos | Exibe a escalação da partida da rodada atualizada com clima. |
+| `!mensalistas` | Todos | Exibe o Quadro Oficial de Mensalistas cadastrados do mês. |
+| `!limparmensalistas` | Todos | Zera o quadro de mensalistas para o próximo ciclo mensal. |
+| `!removermensalista [Nome]` | Todos | Altera a categoria de um mensalista para avulso. |
 | `!nome [NovoNome]` | Todos | Altera o nome dinâmico do assistente (ex: `!nome Zurg`). |
 | `!agentes` | Todos | Lista todos os sub-agentes e comandos disponíveis no bot. |
 | `!clima` | Todos | Consulta a previsão do tempo para a rodada às 19:30. |
@@ -100,47 +118,12 @@ flowchart TD
 
 ---
 
-## 🛠️ Tecnologias Utilizadas
-
-- **Core Runtime:** Node.js (v20+) / Express
-- **LangChain Framework:** `@langchain/core`, `@langchain/google-genai`, `@langchain/openai`
-- **Modelos IA:** Google GenAI SDK (`@google/genai`), Multimodal Audio/Vision
-- **WhatsApp Gateway:** Baileys Client (`@whiskeysockets/baileys`)
-- **Persistência:** SQLite3 em Modo WAL (`better-sqlite3`)
-- **Telemetria SRE Engine:** Motor próprio de coleta de métricas e custos por token
-
----
-
-## 📂 Estrutura do Projeto
-
-```text
-joga10-ai/
-├── agents/
-│   ├── orchestrator.js      # Supervisor & Roteador Multi-Agente
-│   ├── newsAgent.js         # Agente RAG de Notícias em Tempo Real
-│   ├── visionAgent.js       # Agente de Visão Computacional (Comprovante PIX)
-│   ├── financeAgent.js      # Agente Financeiro & PIX
-│   ├── goalkeeperAgent.js   # Agente de Goleiros Externos
-│   ├── weatherAgent.js      # Agente de Previsão do Tempo
-│   └── calloutAgent.js      # Agente Convocador & Lembretes
-├── agent.js                 # Concierge Principal de Presença (LangChain)
-├── llmFactory.js            # Fábrica de LLMs Multi-Provedor (LangChain)
-├── sreTelemetry.js          # Telemetria SRE, Custos, SLI/SLO & Dashboard
-├── database.js              # SQLite Engine, Schemas & Métricas SRE
-├── whatsapp.js              # Gateway de Conexão WhatsApp & Ingestão Mídia
-├── index.js                 # Ponto de Entrada da Aplicação & Servidor Web
-├── futebol.db               # Banco de Dados SQLite
-└── .env                     # Variáveis de Ambiente & Configuração
-```
-
----
-
 ## ⚡ Como Executar Localmente
 
 ### 1. Clonar o Repositório & Instalar Dependências
 ```bash
-git clone https://github.com/seu-usuario/joga10-ai.git
-cd joga10-ai
+git clone https://github.com/amricetti/artificial-intelligence.git
+cd artificial-intelligence/joga10-ai
 npm install
 ```
 
@@ -166,35 +149,6 @@ PORT=5000
 npm start
 ```
 Escaneie o QR Code exibido no terminal com seu WhatsApp para conectar!
-
----
-
-## 📈 Exemplo do Painel de Observabilidade SRE (`!sre`)
-
-```text
-📊 *ZURG - SRE OBSERVAABILIDADE & MÉTRICAS* 🛠️
-------------------------------------
-👑 *Engenheiro SRE / Dono:* Alan Ricetti
-🟢 *Status da Arquitetura:* ONLINE (LangChain Agnostic)
-🤖 *Provedor Ativo:* `gemini`
-⚙️ *Modelo Principal:* `gemini-3.5-flash-lite`
-
-🎯 *INDICADORES DE SERVIÇO (SLI / SLO)*
-  • *SLO Alvo:* 99.0% de Disponibilidade
-  • *SLI Atual (Taxa Sucesso):* 99.8% ✅ [DENTRO DO SLO]
-  • *Total de Requisições:* 142
-
-⏱️ *LATÊNCIA & TEMPO DE RESPOSTA (TTFT)*
-  • *Tempo Médio até 1º Token (TTFT):* 246 ms
-  • *Latência P50 (Mediana):* 753 ms
-  • *Latência P95 (Crítica):* 1.110 ms
-
-💰 *TELEMETRIA DE TOKENS & CUSTOS (USD / BRL)*
-  • *Total Tokens Acumulados:* 57.590
-  • *Custo Hoje (Últimas 24h):* $ 0.0052 USD (~ R$ 0.03 BRL)
-------------------------------------
-💡 _Métricas capturadas via LangChain Telemetry Engine em tempo real._
-```
 
 ---
 
