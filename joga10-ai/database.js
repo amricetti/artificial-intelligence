@@ -149,6 +149,15 @@ function obterListaMensalistas() {
   return db.prepare(`SELECT * FROM jogadores_cadastro WHERE categoria = 'mensalista' ORDER BY nome ASC`).all();
 }
 
+function limparMensalistas() {
+  db.prepare(`UPDATE jogadores_cadastro SET categoria = 'avulso' WHERE categoria = 'mensalista'`).run();
+}
+
+function removerMensalista(nome) {
+  const nomeFormatado = nome.trim();
+  db.prepare(`UPDATE jogadores_cadastro SET categoria = 'avulso' WHERE LOWER(nome) = LOWER(?)`).run(nomeFormatado);
+}
+
 function formatarRelatorioMensalistas(mesReferencia) {
   const mensalistas = obterListaMensalistas();
   const valorMensal = parseFloat(process.env.VALOR_MENSAL || '81.0');
@@ -570,5 +579,7 @@ module.exports = {
   registrarMensagemProcessada,
   getBotName,
   setBotName,
-  formatarRelatorioMensalistas
+  formatarRelatorioMensalistas,
+  limparMensalistas,
+  removerMensalista
 };

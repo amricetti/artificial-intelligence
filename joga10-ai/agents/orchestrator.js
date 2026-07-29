@@ -65,6 +65,28 @@ async function orquestrarMensagem(textoMensagem, nomeRemetente) {
     };
   }
 
+  // 4.1 Comando para Limpar / Zerar a Lista de Mensalistas (!limparmensalistas)
+  if (comandoLimpo === '!limparmensalistas' || comandoLimpo === '!resetarmensalistas' || comandoLimpo === '!limpar mensalistas' || comandoLimpo === '!zerarmensalistas') {
+    db.limparMensalistas();
+    return {
+      agente: 'Concierge Financeiro & Mensalistas',
+      respostaDireta: `🗑️ *QUADRO DE MENSALISTAS ZERADO!*\n\nTodos os mensalistas foram removidos do cadastro mensal com sucesso.`,
+      houveAlteracao: true
+    };
+  }
+
+  // 4.2 Comando para Remover Mensalista Específico (!removermensalista Pedro / !avulso Pedro)
+  const matchRemoverMensalista = textoClean.match(/^(?:!removermensalista|!avulso)\s+(.+)/i);
+  if (matchRemoverMensalista) {
+    const nomeAlvo = matchRemoverMensalista[1].trim();
+    db.removerMensalista(nomeAlvo);
+    return {
+      agente: 'Concierge Financeiro & Mensalistas',
+      respostaDireta: `❌ *MENSALISTA REMOVIDO!*\n\n*${nomeAlvo}* foi alterado(a) no sistema para a categoria *AVULSO*.`,
+      houveAlteracao: true
+    };
+  }
+
   // 4.5. Roteamento Direto para Lista de Presença da Partida (!lista, !presenca, etc.)
   if (comandoLimpo === '!lista' || comandoLimpo === 'lista' || comandoLimpo === '!presenca' || comandoLimpo === '!presença' || comandoLimpo === 'presenca' || comandoLimpo === 'presença' || textoClean.includes('manda a lista') || textoClean.includes('como tá a lista') || textoClean.includes('ver a lista')) {
     const climaInfo = await weatherAgent.obterPrevisaoProximaTerca();
