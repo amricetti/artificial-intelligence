@@ -54,8 +54,18 @@ async function orquestrarMensagem(textoMensagem, nomeRemetente) {
     }
   }
 
-  // 4. Roteamento Direto para Lista de Presença (!lista, !presenca, etc.)
+  // 4. Roteamento Direto para Lista de Mensalistas (!mensalistas, lista dos mensalistas, quem são os mensalistas)
   const comandoLimpo = textoClean.replace(/["'?:;:“”‘’]/g, '').trim();
+  if (comandoLimpo === '!mensalistas' || comandoLimpo === 'mensalistas' || comandoLimpo === '!listamensalistas' || comandoLimpo === '!lista de mensalistas' || textoClean.includes('lista dos mensalistas') || textoClean.includes('lista de mensalistas') || textoClean.includes('quem sao os mensalistas') || textoClean.includes('quem são os mensalistas') || textoClean.includes('quem e mensalista') || textoClean.includes('quem é mensalista')) {
+    const relatorioMensalistas = db.formatarRelatorioMensalistas();
+    return {
+      agente: 'Concierge Financeiro & Mensalistas',
+      respostaDireta: relatorioMensalistas,
+      houveAlteracao: true
+    };
+  }
+
+  // 4.5. Roteamento Direto para Lista de Presença da Partida (!lista, !presenca, etc.)
   if (comandoLimpo === '!lista' || comandoLimpo === 'lista' || comandoLimpo === '!presenca' || comandoLimpo === '!presença' || comandoLimpo === 'presenca' || comandoLimpo === 'presença' || textoClean.includes('manda a lista') || textoClean.includes('como tá a lista') || textoClean.includes('ver a lista')) {
     const climaInfo = await weatherAgent.obterPrevisaoProximaTerca();
     const maxLinha = parseInt(process.env.MAX_JOGADORES_LINHA || '14', 10);
@@ -184,6 +194,13 @@ async function orquestrarMensagem(textoMensagem, nomeRemetente) {
         return {
           agente: 'Concierge Principal',
           respostaDireta: `🌟 *CADASTRO ATUALIZADO!*\n\n*${nomeAlvo}* foi cadastrado(a) no sistema como *MENSALISTA* (R$ 81,00/mês).`
+        };
+
+      case 'SOLICITAR_LISTA_MENSALISTAS':
+        return {
+          agente: 'Concierge Financeiro & Mensalistas',
+          respostaDireta: db.formatarRelatorioMensalistas(),
+          houveAlteracao: true
         };
 
       case 'SOLICITAR_LISTA':

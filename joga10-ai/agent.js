@@ -97,6 +97,13 @@ function extrairAcoesPorRegras(textoMensagem, nomeRemetente) {
     };
   }
 
+  if (t.includes('!mensalistas') || t.includes('lista dos mensalistas') || t.includes('lista de mensalistas') || t.includes('quem são os mensalistas') || t.includes('quem sao os mensalistas') || t.includes('mensalista')) {
+    return {
+      resposta_boleira: `Quadro oficial de mensalistas na área, *${nomeRemetente}*!`,
+      acoes: [{ tipo: 'SOLICITAR_LISTA_MENSALISTAS', nome: nomeRemetente }]
+    };
+  }
+
   if (t.includes('!lista') || t.includes('!presenca') || t.includes('!presença') || t === 'lista' || t.includes('manda a lista') || t.includes('como ta a lista') || t.includes('como tá a lista') || t.includes('ver a lista')) {
     return { 
       resposta_boleira: respostaBoleira || `Guia do jogo na mão, *${nomeRemetente}*! Segue a escalação da pelada:`,

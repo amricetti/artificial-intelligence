@@ -149,6 +149,34 @@ function obterListaMensalistas() {
   return db.prepare(`SELECT * FROM jogadores_cadastro WHERE categoria = 'mensalista' ORDER BY nome ASC`).all();
 }
 
+function formatarRelatorioMensalistas(mesReferencia) {
+  const mensalistas = obterListaMensalistas();
+  const valorMensal = parseFloat(process.env.VALOR_MENSAL || '81.0');
+
+  const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const hoje = new Date();
+  const mesAtualNome = mesReferencia || `${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
+
+  let msg = `🌟 *JOGA10 - QUADRO OFICIAL DE MENSALISTAS* 🌟\n`;
+  msg += `------------------------------------\n`;
+  msg += `📅 *Mês de Referência:* ${mesAtualNome}\n`;
+  msg += `💰 *Cota Mensal:* R$ ${valorMensal.toFixed(2)}/mês\n\n`;
+
+  if (mensalistas.length === 0) {
+    msg += `⚠️ *Nenhum mensalista cadastrado no sistema ainda.*\n\n`;
+    msg += `💡 *Para cadastrar um mensalista, envie:* \`!mensalista [Nome]\` (ex: \`!mensalista Alan\`)\n`;
+  } else {
+    msg += `👑 *Mensalistas Cadastrados (Total: ${mensalistas.length}):*\n`;
+    mensalistas.forEach((m, idx) => {
+      msg += `  ${idx + 1}. 🌟 *${m.nome}* _[Mensalista Ativo]_\n`;
+    });
+    msg += `\n------------------------------------\n`;
+    msg += `💡 _Para cadastrar novos mensalistas, envie "!mensalista [Nome]" ou solicite ao assistente._`;
+  }
+
+  return msg;
+}
+
 /**
  * Registra ou atualiza o status de presença de um jogador.
  */
@@ -541,5 +569,6 @@ module.exports = {
   novaPartida,
   registrarMensagemProcessada,
   getBotName,
-  setBotName
+  setBotName,
+  formatarRelatorioMensalistas
 };
