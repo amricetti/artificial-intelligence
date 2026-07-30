@@ -194,7 +194,7 @@ async function iniciarBotWhatsApp() {
                   msgResposta += `   • *${j}* (Pago)\n`;
                 });
               } else {
-                msgResposta += `⚠️ *Aviso:* Valor recebido, mas não havia pendências abertas no nome de ${pushName}.\n`;
+                msgResposta += `⚠️ *Aviso:* Valor recebido, mas não havia pendências abertas no nome de *${nomePagadorRef}*.\n`;
               }
 
               msgResposta += `------------------------------------`;
