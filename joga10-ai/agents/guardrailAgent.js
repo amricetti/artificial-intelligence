@@ -30,23 +30,63 @@ function ehListaCopiadaEColada(textoMensagem) {
   return contagemLinhasNumeradas >= 3 || (temPalavraLista && contagemLinhasNumeradas >= 2);
 }
 
-function extrairNomesDeListaCopiada(textoMensagem) {
+function extrairListaEstruturadaGuardrail(textoMensagem) {
   const linhas = textoMensagem.split('\n');
-  const nomesExtraidos = [];
+  const confirmados = [];
+  const desistencias = [];
+  const goleiros = [];
+
+  let secaoAtual = 'confirmados';
 
   for (const linha of linhas) {
     const l = linha.trim();
+    if (!l) continue;
+    const lLower = l.toLowerCase();
+
+    // Detecta seções da lista
+    if (lLower.includes('❌') || lLower.includes('fora:') || lLower.includes('desistências') || lLower.includes('desistencias')) {
+      secaoAtual = 'fora';
+      continue;
+    } else if (lLower.includes('🔁') || lLower.includes('reservas:')) {
+      secaoAtual = 'reservas';
+      continue;
+    } else if (lLower.includes('time 1') || lLower.includes('time 2') || lLower.includes('titulares') || lLower.includes('confirmados')) {
+      secaoAtual = 'confirmados';
+      continue;
+    }
+
+    // Ignora cabeçalhos institucionais
+    if (/^(⚽|📅|🕢|📍|🌤️|🟥|🟦|----------------)/i.test(l) || lLower.includes('lista de presença') || lLower.includes('horário') || lLower.includes('endereço') || lLower.includes('clima')) {
+      continue;
+    }
+
+    // Extrai Goleiros (ex: "G - Everton", "G - 🧤 Marcos")
+    const matchGoleiro = l.match(/^(?:G\s*[\-\:]*|Goleiro\s*[\-\:]*)\s*(?:🧤)?\s*([A-Za-zÀ-ÖØ-öø-ÿ0-9\s]+)/i);
+    if (matchGoleiro) {
+      let nomeG = matchGoleiro[1].replace(/🧤|🚑|⏱️|🌟|👑|⚽/g, '').trim();
+      nomeG = nomeG.split(/\(|\-|\–/)[0].trim();
+      if (nomeG.length >= 2 && !/^(linha|espera|fora)/i.test(nomeG.toLowerCase())) {
+        goleiros.push(nomeG);
+      }
+      continue;
+    }
+
+    // Extrai Nomes de Jogadores de Linha
     const limpo = l.replace(/^(?:\d+[\s\.\-\)]*|[•\-*]\s*)/, '').trim();
     if (limpo) {
       let nome = limpo.replace(/🧤|🚑|⏱️|🌟|👑|⚽/g, '').trim();
       nome = nome.split(/\(|\-|\–/)[0].trim();
-      if (nome.length >= 2 && !/^(lista|confirmados|goleiros|linha|espera|desistencias|desistências|futebol|pelada)/i.test(nome.toLowerCase())) {
-        nomesExtraidos.push(nome);
+      if (nome.length >= 2 && !/^(lista|confirmados|goleiros|linha|espera|desistencias|desistências|futebol|pelada|time|reservas)/i.test(nome.toLowerCase())) {
+        if (secaoAtual === 'fora') {
+          desistencias.push(nome);
+        } else {
+          confirmados.push(nome);
+        }
       }
     }
   }
 
-  return nomesExtraidos;
+  return { confirmados, desistencias, goleiros };
 }
 
 /**
@@ -56,17 +96,42 @@ async function processarListaCopiadaGuardrail(textoMensagem, nomeRemetente) {
   const startTime = Date.now();
   console.log(`🛡️ [Guardrail Agent] Detectada tentativa de 'Copiar e Colar' por "${nomeRemetente}". Reconciliando com o Banco de Dados...`);
 
-  const nomesExtraidos = extrairNomesDeListaCopiada(textoMensagem);
+  const { confirmados, desistencias, goleiros } = extrairListaEstruturadaGuardrail(textoMensagem);
 
-  if (nomesExtraidos.length > 0) {
-    // Reconcilia cada nome extraído no SQLite da partida ativa
-    nomesExtraidos.forEach(nome => {
+  // Limpa as presenças anteriores da partida para reinserir a lista reconciliada fielmente
+  if (confirmados.length > 0 || goleiros.length > 0) {
+    db.limparPresencasPartida();
+
+    // Reinsere Goleiros Reconciliados
+    goleiros.forEach(goleiro => {
+      db.salvarPresenca({
+        nome: goleiro,
+        pushName: nomeRemetente,
+        tipoJogador: 'goleiro',
+        status: 'confirmado',
+        convidadoPor: nomeRemetente
+      });
+    });
+
+    // Reinsere Jogadores de Linha Reconciliados
+    confirmados.forEach(nome => {
       db.salvarPresenca({
         nome: nome,
         pushName: nomeRemetente,
         tipoJogador: 'linha',
         status: 'confirmado',
         convidadoPor: nomeRemetente
+      });
+    });
+
+    // Reinsere Desistências
+    desistencias.forEach(nome => {
+      db.salvarPresenca({
+        nome: nome,
+        pushName: nomeRemetente,
+        tipoJogador: 'linha',
+        status: 'desistiu',
+        motivo: 'Registrado em lista copiada'
       });
     });
   }

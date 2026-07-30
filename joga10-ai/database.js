@@ -535,12 +535,27 @@ function formatarMensagemLista(partidaId, limiteLinha = 10, climaInfo = null) {
 }
 
 /**
- * Encerra a partida atual e inicia uma nova.
+ * Encerra a partida atual e inicia uma nova zerando todas as presenças.
  */
 function novaPartida() {
   const pId = getPartidaAtivaId();
   db.prepare(`UPDATE partidas SET status = 'encerrada' WHERE id = ?`).run(pId);
-  return getPartidaAtivaId();
+  db.prepare(`DELETE FROM presencas WHERE partida_id = ?`).run(pId);
+  db.prepare(`DELETE FROM goleiros_externos WHERE partida_id = ?`).run(pId);
+  
+  const novoId = getPartidaAtivaId();
+  db.prepare(`DELETE FROM presencas WHERE partida_id = ?`).run(novoId);
+  db.prepare(`DELETE FROM goleiros_externos WHERE partida_id = ?`).run(novoId);
+  return novoId;
+}
+
+/**
+ * Limpa completamente a lista de presença da partida ativa.
+ */
+function limparPresencasPartida(partidaId) {
+  const pId = partidaId || getPartidaAtivaId();
+  db.prepare(`DELETE FROM presencas WHERE partida_id = ?`).run(pId);
+  db.prepare(`DELETE FROM goleiros_externos WHERE partida_id = ?`).run(pId);
 }
 
 /**
@@ -576,6 +591,7 @@ module.exports = {
   obterPresencasPartida,
   formatarMensagemLista,
   novaPartida,
+  limparPresencasPartida,
   registrarMensagemProcessada,
   getBotName,
   setBotName,

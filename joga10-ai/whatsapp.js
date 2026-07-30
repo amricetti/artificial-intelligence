@@ -174,10 +174,17 @@ async function iniciarBotWhatsApp() {
                 continue;
               }
 
-              const baixa = db.darBaixaInteligentePix(null, pushName, valor);
+              const nomePagadorRef = (resultadoVisao.nomePagador && resultadoVisao.nomePagador.trim().length > 2)
+                ? resultadoVisao.nomePagador.trim()
+                : pushName;
+
+              const baixa = db.darBaixaInteligentePix(null, nomePagadorRef, valor);
 
               let msgResposta = `🧾 *COMPROVANTE DE PIX VERIFICADO POR IA!* ⚽\n`;
               msgResposta += `------------------------------------\n`;
+              if (resultadoVisao.nomePagador && resultadoVisao.nomePagador.trim().length > 2) {
+                msgResposta += `💳 *Pagador (Comprovante):* ${resultadoVisao.nomePagador.trim()}\n`;
+              }
               msgResposta += `👤 *Enviado por:* ${pushName}\n`;
               msgResposta += `💵 *Valor identificado:* R$ ${valor.toFixed(2)}\n`;
 
@@ -256,10 +263,11 @@ async function iniciarBotWhatsApp() {
           continue;
         }
 
-        if (textoLower === '!novapartida' || textoLower === '!limparlista') {
+        if (textoLower === '!novapartida' || textoLower === '!limparlista' || textoLower === '!zerarlista') {
+          db.limparPresencasPartida();
           db.novaPartida();
           await sock.sendMessage(remoteJid, { 
-            text: `🆕 *Nova partida iniciada com sucesso!* Lista e presenças zeradas para a próxima terça-feira.` 
+            text: `🆕 *Partida zerada com sucesso!* Lista e presenças limpas para a próxima terça-feira.` 
           }, { quoted: msg });
           continue;
         }

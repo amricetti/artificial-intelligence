@@ -7,38 +7,53 @@ const { registrarMetricaSRE } = require('../sreTelemetry');
  * Coleta notícias reais de futebol em tempo real via RSS do Google News
  */
 async function buscarNoticiasRSS(termoBusca) {
-  const query = encodeURIComponent(`${termoBusca} futebol`);
-  const url = `https://news.google.com/rss/search?q=${query}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
+  const fetchRSS = (queryStr) => {
+    const query = encodeURIComponent(queryStr);
+    const url = `https://news.google.com/rss/search?q=${query}&hl=pt-BR&gl=BR&ceid=BR:pt-419`;
 
-  return new Promise((resolve) => {
-    https.get(url, (res) => {
-      let xmlData = '';
-      res.on('data', chunk => xmlData += chunk);
-      res.on('end', () => {
-        try {
-          const items = [];
-          const itemRegex = /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>/gi;
+    return new Promise((resolve) => {
+      https.get(url, (res) => {
+        let xmlData = '';
+        res.on('data', chunk => xmlData += chunk);
+        res.on('end', () => {
+          try {
+            const items = [];
+            const itemRegex = /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>/gi;
 
-          let match;
-          while ((match = itemRegex.exec(xmlData)) !== null && items.length < 5) {
-            let title = match[1].replace(/<!\[CDATA\[(.*?)\]\]>/gi, '$1').replace(/<\/?title>/gi, '').trim();
-            const link = match[2].trim();
-            const pubDate = match[3].trim();
+            let match;
+            while ((match = itemRegex.exec(xmlData)) !== null && items.length < 5) {
+              let title = match[1].replace(/<!\[CDATA\[(.*?)\]\]>/gi, '$1').replace(/<\/?title>/gi, '').trim();
+              const link = match[2].trim();
+              const pubDate = match[3].trim();
 
-            if (title && !title.toLowerCase().includes('google notícias')) {
-              items.push({ title, link, pubDate });
+              if (title && !title.toLowerCase().includes('google notícias')) {
+                items.push({ title, link, pubDate });
+              }
             }
-          }
 
-          resolve(items);
-        } catch (e) {
-          resolve([]);
-        }
+            resolve(items);
+          } catch (e) {
+            resolve([]);
+          }
+        });
+      }).on('error', () => {
+        resolve([]);
       });
-    }).on('error', () => {
-      resolve([]);
     });
-  });
+  };
+
+  // Busca notícias das últimas 48h (when:2d)
+  let resultados = await fetchRSS(`${termoBusca} futebol when:2d`);
+  if (resultados.length === 0) {
+    // Fallback para os últimos 7 dias (when:7d)
+    resultados = await fetchRSS(`${termoBusca} futebol when:7d`);
+  }
+  if (resultados.length === 0) {
+    // Fallback para busca geral
+    resultados = await fetchRSS(`${termoBusca} futebol`);
+  }
+
+  return resultados;
 }
 
 /**
